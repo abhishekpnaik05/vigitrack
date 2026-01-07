@@ -49,7 +49,7 @@ export default function Home() {
   const router = useRouter();
 
   const handleWhatsAppClick = () => {
-    const phoneNumber = '9740379711';
+    const phoneNumber = '+919740379711';
     const message = "Hello! I'm interested in VigiTracker.";
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
@@ -96,7 +96,7 @@ export default function Home() {
           </div>
           <div className="relative h-64 w-full overflow-hidden rounded-xl shadow-2xl md:h-auto md:aspect-square">
             <Image
-              src="https://picsum.photos/seed/globe/800/800"
+              src="/image1.png"
               alt="Globe showing GPS tracks"
               fill
               className="object-cover"
@@ -136,7 +136,7 @@ export default function Home() {
         <section className="container mx-auto grid grid-cols-1 items-center gap-12 px-4 py-16 md:grid-cols-2 md:py-24">
             <div className="relative h-64 w-full overflow-hidden rounded-xl shadow-2xl md:h-auto md:aspect-square">
                 <Image
-                src="https://picsum.photos/seed/gpstracker/800/800"
+                src="/image2.png"
                 alt="GPS tracker device"
                 fill
                 className="object-cover"

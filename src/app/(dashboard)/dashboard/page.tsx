@@ -5,6 +5,8 @@ import { Truck, WifiOff, Bell, Loader2 } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query } from 'firebase/firestore';
 import type { Device } from '@/types';
+import Image from 'next/image';
+
 import MapView from '@/components/map/map-view';
 
 function DashboardContent() {
@@ -85,9 +87,23 @@ function DashboardContent() {
           <CardTitle>Live Fleet View</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-[60vh] w-full rounded-lg overflow-hidden border bg-muted">
-            <MapView devices={deviceList} />
-          </div>
+          <div className="relative h-[60vh] w-full overflow-hidden rounded-lg border bg-muted">
+            <Image
+              src="/map.png"
+    alt="Live fleet map preview"
+    fill
+    className="object-cover"
+    priority
+  />
+
+  {/* Optional overlay (recommended) */}
+  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+    <div className="rounded-lg bg-background/80 px-6 py-3 text-sm font-medium shadow">
+      Live Map Preview
+    </div>
+  </div>
+</div>
+
         </CardContent>
       </Card>
     </div>
