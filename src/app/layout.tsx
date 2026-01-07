@@ -1,21 +1,29 @@
-import type { Metadata } from 'next';
-import './globals.css';
-import { FirebaseClientProvider } from '@/firebase';
-import { Toaster } from '@/components/ui/toaster';
-import { cn } from '@/lib/utils';
-
-
+import type { Metadata } from "next";
+import "./globals.css";
+import { FirebaseClientProvider } from "@/firebase";
+import { Toaster } from "@/components/ui/toaster";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: 'VigiTracker',
-  description: 'Advanced GPS Tracking and Fleet Management',
+  title: {
+    default: "VigiTracker",
+    template: "%s | VigiTracker",
+  },
+  description: "Advanced GPS Tracking and Fleet Management",
+  applicationName: "VigiTracker",
+  icons: {
+  icon: "/favicon.png?v=2",
+  shortcut: "/favicon.png?v=2",
+  apple: "/favicon.png?v=2",
+},
+
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en" suppressHydrationWarning className="dark">
       <head>
@@ -25,7 +33,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@400;500&display=swap" rel="stylesheet" />
       </head>
-      <body className={cn('min-h-screen bg-background font-body antialiased')}>
+      <body className={cn("min-h-screen bg-background font-body antialiased")}>
         <FirebaseClientProvider>
           {children}
           <Toaster />
