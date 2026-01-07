@@ -1,0 +1,427 @@
+{
+  "entities": {
+    "Device": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Device",
+      "type": "object",
+      "description": "Represents a tracked device with its associated information and status.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the device."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the device."
+        },
+        "description": {
+          "type": "string",
+          "description": "A description of the device."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the device (e.g., Active, Stopped, Offline)."
+        },
+        "firmwareVersion": {
+          "type": "string",
+          "description": "The current firmware version installed on the device."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who owns the device. (Relationship: User 1:N Device)"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "status",
+        "firmwareVersion",
+        "userId"
+      ]
+    },
+    "Geofence": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Geofence",
+      "type": "object",
+      "description": "Represents a geofence zone defined for a device.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the geofence."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the geofence."
+        },
+        "coordinates": {
+          "type": "array",
+          "description": "An array of coordinates defining the geofence boundary.",
+          "items": {
+            "type": "number"
+          }
+        },
+        "deviceId": {
+          "type": "string",
+          "description": "Reference to the Device associated with the geofence. (Relationship: Device 1:N Geofence)"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "coordinates",
+        "deviceId"
+      ]
+    },
+    "TripSummary": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "TripSummary",
+      "type": "object",
+      "description": "Represents a summary of a device's trip or journey.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the trip summary."
+        },
+        "summary": {
+          "type": "string",
+          "description": "A textual summary of the trip."
+        },
+        "startTime": {
+          "type": "string",
+          "description": "The start time of the trip.",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "The end time of the trip.",
+          "format": "date-time"
+        },
+        "deviceId": {
+          "type": "string",
+          "description": "Reference to the Device associated with the trip summary. (Relationship: Device 1:N TripSummary)"
+        }
+      },
+      "required": [
+        "id",
+        "summary",
+        "startTime",
+        "endTime",
+        "deviceId"
+      ]
+    },
+    "SOS": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SOS",
+      "type": "object",
+      "description": "Represents an SOS emergency event.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the SOS event."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "The timestamp when the SOS event was triggered.",
+          "format": "date-time"
+        },
+        "location": {
+          "type": "string",
+          "description": "The GPS location of the device when the SOS was triggered."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who triggered the SOS. (Relationship: User 1:N SOS)"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "location",
+        "userId"
+      ]
+    },
+    "FirmwareUpdate": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "FirmwareUpdate",
+      "type": "object",
+      "description": "Represents a firmware update for a device.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the firmware update."
+        },
+        "version": {
+          "type": "string",
+          "description": "The version number of the firmware."
+        },
+        "metadata": {
+          "type": "string",
+          "description": "Metadata about the firmware update (e.g., release notes, supported devices)."
+        },
+        "url": {
+          "type": "string",
+          "description": "The URL where the firmware update file can be downloaded.",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "metadata",
+        "url"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        },
+        "name": {
+          "type": "string",
+          "description": "The user's name."
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "name"
+      ]
+    },
+    "Notification": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Notification",
+      "type": "object",
+      "description": "Represents a notification for a user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the notification."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["geofence-enter", "geofence-exit", "offline", "online", "sos"],
+          "description": "The type of notification."
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the notification."
+        },
+        "description": {
+          "type": "string",
+          "description": "The description of the notification."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the notification."
+        },
+        "icon": {
+          "type": "string",
+          "enum": ["MapPin", "Truck", "WifiOff", "Bell"],
+          "description": "The icon to display for the notification."
+        },
+        "iconColor": {
+          "type": "string",
+          "description": "The color of the icon."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User associated with the notification."
+        },
+        "deviceId": {
+          "type": "string",
+          "description": "Reference to the Device associated with the notification."
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "title",
+        "description",
+        "timestamp",
+        "icon",
+        "iconColor",
+        "userId",
+        "deviceId"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous",
+      "google.com"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles. Path-based ownership ensures that only the authenticated user can access their own profile.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/devices/{deviceId}",
+        "definition": {
+          "entityName": "Device",
+          "schema": {
+            "$ref": "#/backend/entities/Device"
+          },
+          "description": "Stores devices owned by a specific user. Includes denormalized 'userId' for authorization independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "deviceId",
+              "description": "The unique identifier of the device."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/devices/{deviceId}/geofences/{geofenceId}",
+        "definition": {
+          "entityName": "Geofence",
+          "schema": {
+            "$ref": "#/backend/entities/Geofence"
+          },
+          "description": "Stores geofences associated with a specific device. Includes denormalized 'userId' for authorization independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "deviceId",
+              "description": "The unique identifier of the device."
+            },
+            {
+              "name": "geofenceId",
+              "description": "The unique identifier of the geofence."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/devices/{deviceId}/tripSummaries/{tripSummaryId}",
+        "definition": {
+          "entityName": "TripSummary",
+          "schema": {
+            "$ref": "#/backend/entities/TripSummary"
+          },
+          "description": "Stores trip summaries associated with a specific device. Includes denormalized 'userId' for authorization independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "deviceId",
+              "description": "The unique identifier of the device."
+            },
+            {
+              "name": "tripSummaryId",
+              "description": "The unique identifier of the trip summary."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/sos/{sosId}",
+        "definition": {
+          "entityName": "SOS",
+          "schema": {
+            "$ref": "#/backend/entities/SOS"
+          },
+          "description": "Stores SOS events triggered by a user. Path-based ownership, enabling direct authorization.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "sosId",
+              "description": "The unique identifier of the SOS event."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/notifications/{notificationId}",
+        "definition": {
+          "entityName": "Notification",
+          "schema": {
+            "$ref": "#/backend/entities/Notification"
+          },
+          "description": "Stores user-specific notifications.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "notificationId",
+              "description": "The unique identifier of the notification."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/firmwareUpdates/{firmwareUpdateId}",
+        "definition": {
+          "entityName": "FirmwareUpdate",
+          "schema": {
+            "$ref": "#/backend/entities/FirmwareUpdate"
+          },
+          "description": "Stores firmware updates. Access to this collection should be secured via a global role check.",
+          "params": [
+            {
+              "name": "firmwareUpdateId",
+              "description": "The unique identifier of the firmware update."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{userId}",
+        "definition": {
+          "entityName": "admin",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Collection to store admin roles. Existence of a document indicates admin privileges. Content is not relevant.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support QAPs by leveraging denormalization and structural segregation. User-owned data (Devices, SOS, Notifications) is stored under the `/users/{userId}` path. This ensures that security rules can easily validate ownership based on the path. Nested data such as Geofences and TripSummaries are stored as subcollections under their parent entities, with denormalized `userId` fields to maintain Authorization Independence.\n\nFirmwareUpdates are stored in a global collection, as they are likely managed by admins and not directly tied to individual users or devices. However, access to this collection would need to be secured via a global role check (e.g., `/roles_admin/{uid}`).\n\nThis structure avoids `get()` calls in security rules and enables secure `list` operations, fulfilling the core design principles and strategy mandates."
+  }
+}

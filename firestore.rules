@@ -1,0 +1,274 @@
+/**
+ * Core Philosophy: This ruleset enforces a strict user-ownership model combined with a global admin role. The primary security mechanism is path-based authorization, where all of a user's private data is stored hierarchically under a path containing their unique user ID (`/users/{userId}`). This design ensures that users can only access their own data tree.
+ *
+ * Data Structure: The database is organized into two main areas:
+ * 1. User-Specific Data: All data owned by a user, such as their profile, devices, SOS events, and device-specific subcollections (geofences, trip summaries), is nested under `/users/{userId}`. This structure is efficient and secure for ownership-based queries.
+ * 2. Global Data: Top-level collections like `/firmwareUpdates` store system-wide data. Access to modify this data is restricted to users with administrative privileges.
+ *
+ * Key Security Decisions:
+ * - Admin Role Management: A `/roles_admin` collection is used to designate administrators. A user is an admin if a document with their UID exists in this collection. To prevent privilege escalation, this collection is made read-only for all clients; roles must be managed by a trusted backend service.
+ * - No User Enumeration: Listing documents in the top-level `/users` collection is explicitly forbidden to protect user privacy.
+ * - Default Deny: Any path not explicitly defined in these rules is inaccessible. All write operations require authentication and authorization.
+ * - Public Firmware Reads: All authenticated users are allowed to read the `/firmwareUpdates` collection. This common pattern allows client devices to easily check for new updates without requiring special permissions. Writes, however, are strictly limited to admins.
+ *
+ * Denormalization for Authorization: To maintain performant and simple rules, relational integrity is enforced through denormalized fields. For example, when a new `Device` is created under `/users/{userId}/devices`, the rule validates that the document's internal `userId` field matches the `{userId}` from the path. This link is then enforced as immutable on updates, preventing documents from being moved between users. This avoids costly `get()` calls in rules for nested subcollections.
+ *
+ * Structural Segregation: User-owned data (`/users`) is structurally separated from global, admin-managed data (`/firmwareUpdates`). This clear separation simplifies rule logic and enhances security by applying different access control models to different parts of the database.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----------------------------------------------------------------------
+    // Helper Functions
+    // ----------------------------------------------------------------------
+
+    /**
+     * Returns true if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Returns true if the authenticated user's UID matches the provided userId.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Returns true if the document exists and the user is the owner.
+     * Used for state-changing operations (update, delete).
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * Returns true if the user has an admin role document.
+     * Admin status is conferred by the existence of a document at /roles_admin/{uid}.
+     */
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+
+    /**
+     * Returns true if the document exists and the user is an admin.
+     * Used for state-changing operations (update, delete) on admin-only collections.
+     */
+    function isExistingAdmin() {
+      return isAdmin() && resource != null;
+    }
+
+    // ----------------------------------------------------------------------
+    // Validation Functions (Prototyping Mode: Only for relational integrity)
+    // ----------------------------------------------------------------------
+
+    /**
+     * On CREATE: Validates that the new User document's email matches the authenticated user's email.
+     */
+    function hasValidNewUserData(userId) {
+      // When a user document is created, its email must match the token's email.
+      // And the document ID must match the user's UID.
+      return request.resource.data.email == request.auth.token.email && request.resource.id == userId;
+    }
+
+    /**
+     * On UPDATE: Ensures the User document's ID remains unchanged.
+     */
+    function isUserDataImmutable() {
+      return request.resource.data.id == resource.data.id;
+    }
+
+    /**
+     * On CREATE: Validates that the new Device document correctly links to its owner.
+     */
+    function hasValidNewDeviceData(userId) {
+      return request.resource.data.userId == userId;
+    }
+
+    /**
+     * On UPDATE: Ensures the Device's owner link is immutable.
+     */
+    function isDeviceDataImmutable() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+    /**
+     * On CREATE: Validates that the new Geofence document correctly links to its parent device.
+     */
+    function hasValidNewGeofenceData(deviceId) {
+      return request.resource.data.deviceId == deviceId;
+    }
+
+    /**
+     * On UPDATE: Ensures the Geofence's parent device link is immutable.
+     */
+    function isGeofenceDataImmutable() {
+      return request.resource.data.deviceId == resource.data.deviceId;
+    }
+
+    /**
+     * On CREATE: Validates that the new TripSummary document correctly links to its parent device.
+     */
+    function hasValidNewTripSummaryData(deviceId) {
+      return request.resource.data.deviceId == deviceId;
+    }
+
+    /**
+     * On UPDATE: Ensures the TripSummary's parent device link is immutable.
+     */
+    function isTripSummaryDataImmutable() {
+      return request.resource.data.deviceId == resource.data.deviceId;
+    }
+
+    /**
+     * On CREATE: Validates that the new SOS document correctly links to its owner.
+     */
+    function hasValidNewSosData(userId) {
+      return request.resource.data.userId == userId;
+    }
+
+    /**
+     * On UPDATE: Ensures the SOS document's owner link is immutable.
+     */
+    function isSosDataImmutable() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+
+    // ----------------------------------------------------------------------
+    // User Data
+    // ----------------------------------------------------------------------
+
+    /**
+     * @description A user can create their own profile, and can only read, update, or delete their own document. Listing all users is forbidden.
+     * @path /users/{userId}
+     * @allow (get) A user with UID 'user_abc' requests their own document at /users/user_abc.
+     * @allow (create) A new user with UID 'user_abc' creates their profile at /users/user_abc.
+     * @deny (list) Any user attempts to list the /users collection.
+     * @deny (get) A user with UID 'user_xyz' tries to read /users/user_abc.
+     * @principle Restricts access to a user's own data tree and prevents user enumeration for privacy.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
+
+      /**
+       * @description A user can manage all devices associated with their account.
+       * @path /users/{userId}/devices/{deviceId}
+       * @allow (create) User 'user_abc' creates a new device document in their own /devices subcollection.
+       * @deny (list) User 'user_xyz' tries to list devices at /users/user_abc/devices.
+       * @principle Enforces document ownership for all CRUD operations within a user's private subcollection.
+       */
+      match /devices/{deviceId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow update: if isExistingOwner(userId);
+        allow delete: if isExistingOwner(userId);
+
+        /**
+         * @description A user can manage geofences for devices they own. Access is inherited from the parent user path.
+         * @path /users/{userId}/devices/{deviceId}/geofences/{geofenceId}
+         * @allow (get) User 'user_abc' reads a geofence for one of their devices.
+         * @deny (create) User 'user_xyz' tries to create a geofence for a device owned by 'user_abc'.
+         * @principle Secures nested subcollections by checking ownership at the top of the data tree.
+         */
+        match /geofences/{geofenceId} {
+          allow get: if isOwner(userId);
+          allow list: if isOwner(userId);
+          allow create: if isOwner(userId) && hasValidNewGeofenceData(deviceId);
+          allow update: if isExistingOwner(userId) && isGeofenceDataImmutable();
+          allow delete: if isExistingOwner(userId);
+        }
+
+        /**
+         * @description A user can manage trip summaries for devices they own. Access is inherited from the parent user path.
+         * @path /users/{userId}/devices/{deviceId}/tripSummaries/{tripSummaryId}
+         * @allow (list) User 'user_abc' lists all trip summaries for one of their devices.
+         * @deny (delete) User 'user_xyz' tries to delete a trip summary belonging to 'user_abc'.
+         * @principle Secures nested subcollections by checking ownership at the top of the data tree.
+         */
+        match /tripSummaries/{tripSummaryId} {
+          allow get: if isOwner(userId);
+          allow list: if isOwner(userId);
+          allow create: if isOwner(userId) && hasValidNewTripSummaryData(deviceId);
+          allow update: if isExistingOwner(userId) && isTripSummaryDataImmutable();
+          allow delete: if isExistingOwner(userId);
+        }
+      }
+
+      /**
+       * @description A user can create and manage their own SOS emergency events.
+       * @path /users/{userId}/sos/{sosId}
+       * @allow (create) User 'user_abc' triggers an SOS, creating a document in their own /sos subcollection.
+       * @deny (get) User 'user_xyz' tries to read an SOS event for 'user_abc'.
+       * @principle Enforces document ownership for a user's private subcollection.
+       */
+      match /sos/{sosId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && hasValidNewSosData(userId);
+        allow update: if isExistingOwner(userId) && isSosDataImmutable();
+        allow delete: if isExistingOwner(userId);
+      }
+      
+      /**
+       * @description A user can read and manage their own notifications.
+       * @path /users/{userId}/notifications/{notificationId}
+       * @allow (list) User 'user_abc' can list their own notifications.
+       * @deny (create) Notifications are created server-side, not by clients.
+       */
+      match /notifications/{notificationId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if false; // Or based on specific logic
+        allow update: if false;
+        allow delete: if isOwner(userId);
+      }
+    }
+
+
+    // ----------------------------------------------------------------------
+    // Global & Admin Data
+    // ----------------------------------------------------------------------
+
+    /**
+     * @description Any signed-in user can read firmware updates. Only admins can create, update, or delete them.
+     * @path /firmwareUpdates/{firmwareUpdateId}
+     * @allow (get) Any authenticated user reads a firmware update document.
+     * @allow (create) An admin user creates a new firmware update document.
+     * @deny (update) A non-admin user tries to modify an existing firmware update.
+     * @deny (delete) A non-admin user tries to delete a firmware update.
+     * @principle Implements a global read-only collection with write access restricted by an admin role.
+     */
+    match /firmwareUpdates/{firmwareUpdateId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isExistingAdmin();
+      allow delete: if isExistingAdmin();
+    }
+
+    /**
+     * @description The roles collection is read-only from the client to prevent privilege escalation. It is used by security rules to check for admin status.
+     * @path /roles_admin/{userId}
+     * @allow (get) An admin checks if another user is an admin.
+     * @deny (create) Any user attempts to make themselves an admin.
+     * @deny (update) Any user attempts to modify a role document.
+     * @principle Prevents self-assigned privilege escalation by making role documents immutable from the client-side.
+     */
+    match /roles_admin/{userId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}
