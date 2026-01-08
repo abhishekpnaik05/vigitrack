@@ -18,7 +18,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { PlusCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import { Device } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -57,57 +57,62 @@ export function AddGeofenceDialog({ devices }: AddGeofenceDialogProps) {
       });
       return;
     }
-
-    try {
-      const selectedDevice = devices.find(d => d.id === values.deviceId);
-      if (!selectedDevice) {
-        toast({
-          variant: 'destructive',
-          title: 'Device not found',
-          description: 'The selected device could not be found.',
-        });
-        return;
-      }
-      
-      // 1. Add the Geofence
-      const geofencesRef = collection(firestore, 'users', user.uid, 'devices', values.deviceId, 'geofences');
-      const mockCoordinates = [34.0522, -118.2437]; // Using mock coordinates for now
-
-      const geofenceDocRef = await addDoc(geofencesRef, {
-        name: values.name,
-        deviceId: values.deviceId,
-        coordinates: mockCoordinates,
-        createdAt: new Date(),
-      });
-
-      toast({
-        title: 'Geofence Added',
-        description: `Geofence "${values.name}" has been added successfully.`,
-      });
-      
-      // 2. Add a sample notification
-      const notificationsRef = collection(firestore, 'users', user.uid, 'notifications');
-      await addDoc(notificationsRef, {
-          type: 'geofence-exit',
-          title: 'Device Exited Geofence',
-          description: `${selectedDevice.name} has exited the "${values.name}" geofence.`,
-          timestamp: new Date(),
-          icon: 'MapPin',
-          iconColor: 'text-yellow-500',
-          userId: user.uid,
-          deviceId: selectedDevice.id,
-          deviceName: selectedDevice.name,
-          deviceStatus: selectedDevice.status,
-      });
-
-      form.reset();
-      setOpen(false);
-    } catch (error: any) {
+    
+    const selectedDevice = devices.find(d => d.id === values.deviceId);
+    if (!selectedDevice) {
       toast({
         variant: 'destructive',
-        title: 'Error Adding Geofence',
-        description: error.message || 'An unexpected error occurred.',
+        title: 'Device not found',
+        description: 'The selected device could not be found.',
       });
+      return;
+    }
+    
+    try {
+        const geofencesRef = collection(firestore, 'users', user.uid, 'devices', values.deviceId, 'geofences');
+        const mockCoordinates = [13.150940, 77.610027];
+        
+        const newGeofenceData = {
+          name: values.name,
+          deviceId: values.deviceId,
+          coordinates: mockCoordinates,
+          createdAt: new Date(),
+        };
+
+        await addDoc(geofencesRef, newGeofenceData);
+
+        toast({
+          title: 'Geofence Added',
+          description: `Geofence "${values.name}" has been added successfully.`,
+        });
+
+        // Add a sample notification
+        const notificationsRef = collection(firestore, 'users', user.uid, 'notifications');
+        const newNotification = {
+            type: 'geofence-exit',
+            title: 'Device Exited Geofence',
+            description: `${selectedDevice.name} has exited the "${values.name}" geofence.`,
+            timestamp: new Date(),
+            icon: 'MapPin',
+            iconColor: 'text-yellow-500',
+            userId: user.uid,
+            deviceId: selectedDevice.id,
+            deviceName: selectedDevice.name,
+            deviceStatus: selectedDevice.status,
+        };
+
+        await addDoc(notificationsRef, newNotification);
+
+        form.reset();
+        setOpen(false);
+    } catch(e: any) {
+        // The global error handler in FirebaseProvider will catch permission errors
+        console.error("Error adding document: ", e);
+        toast({
+            variant: "destructive",
+            title: "Uh oh! Something went wrong.",
+            description: e.message || "Could not save geofence.",
+        });
     }
   }
 

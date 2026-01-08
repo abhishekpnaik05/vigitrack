@@ -26,8 +26,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ArrowUpDown, MoreHorizontal, Truck, Power, WifiOff } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useFirestore, useUser, deleteDocumentNonBlocking } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import React from 'react';
 
@@ -62,7 +62,7 @@ const ActionsCell = ({ row }: { row: { original: Device } }) => {
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!user || !firestore) {
       toast({
         variant: 'destructive',
@@ -72,7 +72,7 @@ const ActionsCell = ({ row }: { row: { original: Device } }) => {
       return;
     }
     const deviceRef = doc(firestore, 'users', user.uid, 'devices', device.id);
-    deleteDocumentNonBlocking(deviceRef);
+    await deleteDoc(deviceRef);
     toast({
       title: 'Device Deleted',
       description: `"${device.name}" has been removed.`,

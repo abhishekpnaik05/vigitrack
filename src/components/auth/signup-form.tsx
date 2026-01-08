@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, updateProfile } from 'firebase/auth';
-import { useAuth, useFirestore, setDocumentNonBlocking } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -81,7 +81,7 @@ export function SignupForm() {
 
       // Create user document in Firestore
       const userRef = doc(firestore, 'users', user.uid);
-      setDocumentNonBlocking(userRef, {
+      await setDoc(userRef, {
         id: user.uid,
         name: values.name,
         email: values.email,

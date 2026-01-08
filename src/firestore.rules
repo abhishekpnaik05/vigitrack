@@ -168,8 +168,8 @@ service cloud.firestore {
       match /devices/{deviceId} {
         allow get: if isOwner(userId);
         allow list: if isOwner(userId);
-        allow create: if isOwner(userId);
-        allow update: if isExistingOwner(userId);
+        allow create: if isOwner(userId) && hasValidNewDeviceData(userId);
+        allow update: if isExistingOwner(userId) && isDeviceDataImmutable();
         allow delete: if isExistingOwner(userId);
 
         /**

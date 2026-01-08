@@ -18,8 +18,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { PlusCircle, Loader2, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
-import { collection, serverTimestamp, addDoc, Timestamp } from 'firebase/firestore';
+import { useUser, useFirestore } from '@/firebase';
+import { collection, addDoc } from 'firebase/firestore';
 
 const deviceFormSchema = z.object({
   id: z.string().min(1, 'Device ID is required'),
@@ -52,30 +52,38 @@ export function AddDeviceDialog() {
   const { formState, handleSubmit, reset, setValue } = form;
   const { isSubmitting } = formState;
 
-  const addDeviceToFirestore = async (values: z.infer<typeof deviceFormSchema>) => {
-    if (!user || !firestore) return;
+  async function onSubmit(values: z.infer<typeof deviceFormSchema>) {
+    if (!user || !firestore) {
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'You must be logged in to add a device.',
+      });
+      return;
+    }
 
     try {
         const devicesRef = collection(firestore, 'users', user.uid, 'devices');
-        const newDevice = {
+        const newDeviceData = {
             id: values.id,
             name: values.name,
             firmwareVersion: values.firmwareVersion,
             userId: user.uid,
             status: 'Active',
             lastLocation: { lat: values.latitude, lng: values.longitude },
-            lastSeen: serverTimestamp(),
+            lastSeen: new Date(),
         };
-        // Use addDoc and get the reference to the new document
-        const deviceDocRef = await addDoc(devicesRef, newDevice);
+
+        const deviceDocRef = await addDoc(devicesRef, newDeviceData);
 
         toast({
-            title: 'Device Added',
-            description: `Device "${values.name}" has been added successfully.`,
+          title: 'Device Added',
+          description: `Device "${values.name}" has been added successfully.`,
         });
 
+        // Add a sample notification
         const notificationsRef = collection(firestore, 'users', user.uid, 'notifications');
-        await addDoc(notificationsRef, {
+        const newNotification = {
             type: 'online',
             title: 'Device Online',
             description: `Device "${values.name}" has been added and is now online.`,
@@ -86,15 +94,19 @@ export function AddDeviceDialog() {
             deviceId: deviceDocRef.id,
             deviceName: values.name,
             deviceStatus: 'Active',
-        });
+        };
+        
+        await addDoc(notificationsRef, newNotification);
 
         reset();
         setOpen(false);
-    } catch (error: any) {
+    } catch(e: any) {
+        // The global error handler in FirebaseProvider will catch permission errors
+        console.error("Error adding document: ", e);
         toast({
-            variant: 'destructive',
-            title: 'Error Adding Device',
-            description: error.message || 'An unexpected error occurred.',
+            variant: "destructive",
+            title: "Uh oh! Something went wrong.",
+            description: e.message || "Could not save device.",
         });
     }
   }
@@ -139,18 +151,6 @@ export function AddDeviceDialog() {
     );
   }
 
-  async function onSubmit(values: z.infer<typeof deviceFormSchema>) {
-    if (!user) {
-      toast({
-        variant: 'destructive',
-        title: 'Authentication Error',
-        description: 'You must be logged in to add a device.',
-      });
-      return;
-    }
-    await addDeviceToFirestore(values);
-  }
-
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
         setOpen(isOpen);
@@ -167,7 +167,7 @@ export function AddDeviceDialog() {
         <DialogHeader>
           <DialogTitle>Add New Device</DialogTitle>
           <DialogDescription>
-            Enter device details. Fetch location or enter it manually.
+            Enter device details. Fetch location or enter it manually. A sample notification will be created.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -266,4 +266,3 @@ export function AddDeviceDialog() {
     </Dialog>
   );
 }
-    

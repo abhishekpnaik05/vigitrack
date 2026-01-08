@@ -13,7 +13,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import { setDocumentNonBlocking } from '@/firebase';
 
 const profileFormSchema = z.object({
   name: z.string().min(1, { message: 'Name is required' }),
@@ -58,7 +57,7 @@ export default function ProfilePage() {
       });
 
       const userRef = doc(firestore, 'users', user.uid);
-      setDocumentNonBlocking(userRef, { name: values.name, email: values.email }, { merge: true });
+      await setDoc(userRef, { name: values.name, email: values.email }, { merge: true });
 
       toast({
         title: 'Profile Updated',
