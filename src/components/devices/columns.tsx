@@ -13,8 +13,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { ArrowUpDown, MoreHorizontal, Truck, Power, WifiOff } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useFirestore, useUser, deleteDocumentNonBlocking } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
+import React from 'react';
 
 const statusConfig: Record<
   DeviceStatus,
@@ -40,6 +55,83 @@ const statusConfig: Record<
     badgeVariant: 'destructive',
   },
 };
+
+const ActionsCell = ({ row }: { row: { original: Device } }) => {
+  const device = row.original;
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+
+  const handleDelete = () => {
+    if (!user || !firestore) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'You must be logged in to delete a device.',
+      });
+      return;
+    }
+    const deviceRef = doc(firestore, 'users', user.uid, 'devices', device.id);
+    deleteDocumentNonBlocking(deviceRef);
+    toast({
+      title: 'Device Deleted',
+      description: `"${device.name}" has been removed.`,
+    });
+  };
+
+  return (
+    <AlertDialog>
+      <div className="text-right">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 p-0">
+              <span className="sr-only">Open menu</span>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem
+              onClick={() => navigator.clipboard.writeText(device.id)}
+            >
+              Copy device ID
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href={`/devices/${device.id}`}>View details</Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem>Edit device</DropdownMenuItem>
+            <AlertDialogTrigger asChild>
+                <DropdownMenuItem
+                className="text-destructive"
+                onSelect={(e) => e.preventDefault()} // Prevents DropdownMenu from closing
+                >
+                Delete device
+                </DropdownMenuItem>
+            </AlertDialogTrigger>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. This will permanently delete the device
+            "{device.name}" and all its associated data.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+            Yes, delete device
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+};
+
 
 export const columns: ColumnDef<Device>[] = [
   {
@@ -110,11 +202,16 @@ export const columns: ColumnDef<Device>[] = [
     accessorKey: 'lastSeen',
     header: 'Last Seen',
     cell: ({ row }) => {
-      const lastSeen = row.getValue('lastSeen') as { seconds: number, nanoseconds: number } | null;
-      if (!lastSeen) return 'Never';
+      const lastSeenValue = row.getValue('lastSeen');
+      if (!lastSeenValue) return 'Never';
       
+      // Handle both string and Timestamp object
       try {
-        const date = new Date(lastSeen.seconds * 1000);
+        const date = typeof lastSeenValue === 'string' 
+          ? new Date(lastSeenValue)
+          // @ts-ignore
+          : new Date(lastSeenValue.seconds * 1000);
+          
         return <span>{formatDistanceToNow(date, { addSuffix: true })}</span>;
       } catch (e) {
         return 'Invalid Date';
@@ -123,36 +220,6 @@ export const columns: ColumnDef<Device>[] = [
   },
   {
     id: 'actions',
-    cell: ({ row }) => {
-      const device = row.original;
-      return (
-        <div className="text-right">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => navigator.clipboard.writeText(device.id)}
-              >
-                Copy device ID
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href={`/devices/${device.id}`}>View details</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>Edit device</DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">
-                Delete device
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      );
-    },
+    cell: ActionsCell,
   },
 ];

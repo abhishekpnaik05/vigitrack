@@ -19,7 +19,7 @@ import * as z from 'zod';
 import { PlusCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
-import { collection, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
 import { Device } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
@@ -49,7 +49,7 @@ export function AddGeofenceDialog({ devices }: AddGeofenceDialogProps) {
   const { isSubmitting } = form.formState;
 
   async function onSubmit(values: z.infer<typeof geofenceFormSchema>) {
-    if (!user) {
+    if (!user || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Authentication Error',
@@ -59,21 +59,45 @@ export function AddGeofenceDialog({ devices }: AddGeofenceDialogProps) {
     }
 
     try {
-      const geofencesRef = collection(firestore, 'users', user.uid, 'devices', values.deviceId, 'geofences');
+      const selectedDevice = devices.find(d => d.id === values.deviceId);
+      if (!selectedDevice) {
+        toast({
+          variant: 'destructive',
+          title: 'Device not found',
+          description: 'The selected device could not be found.',
+        });
+        return;
+      }
       
-      // Using mock coordinates for now. A real implementation would use a map interface.
-      const mockCoordinates = [34.0522, -118.2437];
+      // 1. Add the Geofence
+      const geofencesRef = collection(firestore, 'users', user.uid, 'devices', values.deviceId, 'geofences');
+      const mockCoordinates = [34.0522, -118.2437]; // Using mock coordinates for now
 
-      await addDocumentNonBlocking(geofencesRef, {
+      const geofenceDocRef = await addDoc(geofencesRef, {
         name: values.name,
         deviceId: values.deviceId,
         coordinates: mockCoordinates,
-        createdAt: serverTimestamp(),
+        createdAt: new Date(),
       });
 
       toast({
         title: 'Geofence Added',
         description: `Geofence "${values.name}" has been added successfully.`,
+      });
+      
+      // 2. Add a sample notification
+      const notificationsRef = collection(firestore, 'users', user.uid, 'notifications');
+      await addDoc(notificationsRef, {
+          type: 'geofence-exit',
+          title: 'Device Exited Geofence',
+          description: `${selectedDevice.name} has exited the "${values.name}" geofence.`,
+          timestamp: new Date(),
+          icon: 'MapPin',
+          iconColor: 'text-yellow-500',
+          userId: user.uid,
+          deviceId: selectedDevice.id,
+          deviceName: selectedDevice.name,
+          deviceStatus: selectedDevice.status,
       });
 
       form.reset();
@@ -98,7 +122,7 @@ export function AddGeofenceDialog({ devices }: AddGeofenceDialogProps) {
         <DialogHeader>
           <DialogTitle>Create New Geofence</DialogTitle>
           <DialogDescription>
-            Define a virtual boundary for one of your devices.
+            Define a virtual boundary for one of your devices. A sample notification will be created.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -110,7 +134,7 @@ export function AddGeofenceDialog({ devices }: AddGeofenceDialogProps) {
                 <FormItem>
                   <FormLabel>Geofence Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Main Warehouse" {...field} />
+                    <Input placeholder="e.g., Downtown Bangalore" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

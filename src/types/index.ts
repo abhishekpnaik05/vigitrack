@@ -11,7 +11,7 @@ export type Device = {
     lat: number;
     lng: number;
   };
-  lastSeen: Timestamp | null;
+  lastSeen: Timestamp | string | null;
   userId?: string;
 };
 
@@ -54,4 +54,6 @@ export type Notification = {
   iconColor: string;
   userId: string;
   deviceId: string;
+  deviceName: string;
+  deviceStatus: DeviceStatus;
 }

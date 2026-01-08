@@ -16,19 +16,24 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { PlusCircle, Loader2 } from 'lucide-react';
+import { PlusCircle, Loader2, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
-import { collection, serverTimestamp } from 'firebase/firestore';
+import { collection, serverTimestamp, addDoc, Timestamp } from 'firebase/firestore';
 
 const deviceFormSchema = z.object({
   id: z.string().min(1, 'Device ID is required'),
   name: z.string().min(1, 'Device name is required'),
   firmwareVersion: z.string().min(1, 'Firmware version is required'),
+  latitude: z.number({ coerce: true }).min(-90, "Invalid latitude").max(90, "Invalid latitude"),
+  longitude: z.number({ coerce: true }).min(-180, "Invalid longitude").max(180, "Invalid longitude"),
 });
+
+const DEFAULT_LOCATION = { lat: 13.150940, lng: 77.610027 }; // Sir M Visvesvaraya Institute of Technology
 
 export function AddDeviceDialog() {
   const [open, setOpen] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const { toast } = useToast();
   const { user } = useUser();
   const firestore = useFirestore();
@@ -39,10 +44,100 @@ export function AddDeviceDialog() {
       id: '',
       name: '',
       firmwareVersion: '1.0.0',
+      latitude: '' as any,
+      longitude: '' as any,
     },
   });
 
-  const { isSubmitting } = form.formState;
+  const { formState, handleSubmit, reset, setValue } = form;
+  const { isSubmitting } = formState;
+
+  const addDeviceToFirestore = async (values: z.infer<typeof deviceFormSchema>) => {
+    if (!user || !firestore) return;
+
+    try {
+        const devicesRef = collection(firestore, 'users', user.uid, 'devices');
+        const newDevice = {
+            id: values.id,
+            name: values.name,
+            firmwareVersion: values.firmwareVersion,
+            userId: user.uid,
+            status: 'Active',
+            lastLocation: { lat: values.latitude, lng: values.longitude },
+            lastSeen: serverTimestamp(),
+        };
+        // Use addDoc and get the reference to the new document
+        const deviceDocRef = await addDoc(devicesRef, newDevice);
+
+        toast({
+            title: 'Device Added',
+            description: `Device "${values.name}" has been added successfully.`,
+        });
+
+        const notificationsRef = collection(firestore, 'users', user.uid, 'notifications');
+        await addDoc(notificationsRef, {
+            type: 'online',
+            title: 'Device Online',
+            description: `Device "${values.name}" has been added and is now online.`,
+            timestamp: new Date(),
+            icon: 'Truck',
+            iconColor: 'text-green-500',
+            userId: user.uid,
+            deviceId: deviceDocRef.id,
+            deviceName: values.name,
+            deviceStatus: 'Active',
+        });
+
+        reset();
+        setOpen(false);
+    } catch (error: any) {
+        toast({
+            variant: 'destructive',
+            title: 'Error Adding Device',
+            description: error.message || 'An unexpected error occurred.',
+        });
+    }
+  }
+  
+  const fetchLocation = () => {
+    setIsLocating(true);
+
+     if (!navigator.geolocation) {
+        toast({
+            variant: 'destructive',
+            title: 'Geolocation not supported',
+            description: 'Your browser does not support geolocation. Using default location.',
+        });
+        setValue('latitude', DEFAULT_LOCATION.lat);
+        setValue('longitude', DEFAULT_LOCATION.lng);
+        setIsLocating(false);
+        return;
+    }
+
+     navigator.geolocation.getCurrentPosition(
+        (position) => {
+            const { latitude, longitude } = position.coords;
+            setValue('latitude', latitude);
+            setValue('longitude', longitude);
+             toast({
+                title: 'Location Found',
+                description: 'Current location has been fetched. You can edit it if needed.',
+            });
+            setIsLocating(false);
+        },
+        (error) => {
+            toast({
+                variant: 'destructive',
+                title: 'Location Error',
+                description: 'Could not get your location. Please ensure location services are enabled. You can enter it manually.',
+            });
+            setValue('latitude', DEFAULT_LOCATION.lat);
+            setValue('longitude', DEFAULT_LOCATION.lng);
+            setIsLocating(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }
 
   async function onSubmit(values: z.infer<typeof deviceFormSchema>) {
     if (!user) {
@@ -53,53 +148,30 @@ export function AddDeviceDialog() {
       });
       return;
     }
-
-    try {
-      const devicesRef = collection(firestore, 'users', user.uid, 'devices');
-      // A random location in a given city (e.g., San Francisco)
-      const lat = 37.7749 + (Math.random() - 0.5) * 0.1;
-      const lng = -122.4194 + (Math.random() - 0.5) * 0.1;
-
-      await addDocumentNonBlocking(devicesRef, {
-        ...values,
-        userId: user.uid,
-        status: 'Active', 
-        lastLocation: { lat, lng },
-        lastSeen: serverTimestamp(),
-      });
-
-      toast({
-        title: 'Device Added',
-        description: `Device "${values.name}" has been added successfully.`,
-      });
-
-      form.reset();
-      setOpen(false);
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error Adding Device',
-        description: error.message || 'An unexpected error occurred.',
-      });
-    }
+    await addDeviceToFirestore(values);
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        if (!isOpen) {
+            reset();
+        }
+    }}>
       <DialogTrigger asChild>
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" /> Add Device
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add New Device</DialogTitle>
           <DialogDescription>
-            Enter the details for your new tracking device.
+            Enter device details. Fetch location or enter it manually.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
             <FormField
               control={form.control}
               name="id"
@@ -139,6 +211,47 @@ export function AddDeviceDialog() {
                 </FormItem>
               )}
             />
+
+            <div className="space-y-2">
+              <div className='flex justify-between items-center'>
+                <FormLabel>Device Location</FormLabel>
+                <Button type="button" variant="outline" size="sm" onClick={fetchLocation} disabled={isLocating}>
+                      {isLocating ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <MapPin className="mr-2 h-4 w-4" />
+                    )}
+                    Fetch
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                  <FormField
+                    control={form.control}
+                    name="latitude"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormControl>
+                          <Input type="number" placeholder="Latitude" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="longitude"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormControl>
+                          <Input type="number" placeholder="Longitude" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+              </div>
+            </div>
+
             <DialogFooter>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? (
@@ -153,3 +266,4 @@ export function AddDeviceDialog() {
     </Dialog>
   );
 }
+    

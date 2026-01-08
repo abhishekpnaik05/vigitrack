@@ -222,12 +222,12 @@ service cloud.firestore {
        * @description A user can read and manage their own notifications.
        * @path /users/{userId}/notifications/{notificationId}
        * @allow (list) User 'user_abc' can list their own notifications.
-       * @deny (create) Notifications are created server-side, not by clients.
+       * @deny (update) Notifications are immutable from the client.
        */
       match /notifications/{notificationId} {
         allow get: if isOwner(userId);
         allow list: if isOwner(userId);
-        allow create: if false; // Or based on specific logic
+        allow create: if isOwner(userId);
         allow update: if false;
         allow delete: if isOwner(userId);
       }
